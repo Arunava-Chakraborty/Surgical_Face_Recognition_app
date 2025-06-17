@@ -1,0 +1,6 @@
+streamlit
+opencv-python
+scikit-image
+scikit-learn==1.2.2  # or version matching your model training environment
+joblib
+numpy
