@@ -6,7 +6,8 @@ import mysql.connector
 import io
 from skimage.feature import local_binary_pattern, hog
 from sklearn.metrics.pairwise import cosine_similarity
-# ... (Keep your import statements unchanged)
+from pathlib import Path
+import requests
 
 # -------------------- App Setup --------------------
 st.set_page_config(page_title="Surgical Face Recognition", layout="wide")
@@ -73,15 +74,11 @@ def fetch_all_features(stage_filter=None):
     for label, stage, vec_blob, img_blob in data:
         try:
             feature = joblib.load(io.BytesIO(vec_blob))
-
-            # Ensure shape consistency with model
             if feature.shape[1] != model.named_steps['pca'].n_components_:
                 print(f"❌ Skipping {label} ({stage}) due to shape mismatch: {feature.shape}")
                 continue
-
             img_array = np.frombuffer(img_blob, np.uint8)
             img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
             labels.append(label)
             stages.append(stage)
             vectors.append(feature)
@@ -129,9 +126,53 @@ def save_to_db(label, stage, features_pca, image):
 
 # -------------------- Page 1: Home --------------------
 if page == "🏠 Home":
-    st.title("💡 Surgical Face Recognition System")
-    st.markdown("""Welcome to the **Surgical Face Recognition App** powered by PCA, LBP, HOG and a Voting Classifier (SVM + RF).""")
-    st.video("https://www.youtube.com/watch?v=QxVZYiJKl1Y")
+    # ---- CSS to prevent scrolling ----
+    st.markdown("""
+<style>
+/* Disable vertical scrolling */
+body, html, .main {
+    overflow: hidden !important;
+}
+
+/* Reduce padding and align title to top-left */
+.block-container {
+    padding-top: 1rem;
+    padding-bottom: 0rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+}
+</style>
+""", unsafe_allow_html=True)
+    st.markdown("""
+<style>
+.simple-title-container {
+  padding-top: 10px;
+  text-align: left;
+}
+
+.simple-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #00ffe1;
+  margin-bottom: 5px;
+}
+
+.simple-subtitle {
+  font-size: 18px;
+  color: #ffdd57;
+  margin-top: 0;
+}
+</style>
+
+<div class="simple-title-container">
+  <div class="simple-title">Surgical Face Recognition System</div>
+  <div class="simple-subtitle">Built with PCA + LBP + KNN + SVM +Voting Classifier</div>
+</div>""", unsafe_allow_html=True)
+
+
+   
+
+
     st.markdown("### 📚 Project Tutorials / Blogs")
     st.markdown("""- 📘 [Blog 1: Dataset Building](https://medium.com/@oarunavachakraborty/blog-1-dataset-building-for-surgical-face-recognition-f91e4b3fe914)
 - ⚙️ [Blog 2: Feature Engineering](https://medium.com/@oarunavachakraborty/blog-2-feature-engineering-for-surgical-face-recognition-cec060657d39)
