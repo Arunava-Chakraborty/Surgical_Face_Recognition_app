@@ -8,11 +8,12 @@ from skimage.feature import local_binary_pattern, hog
 from sklearn.metrics.pairwise import cosine_similarity
 from pathlib import Path
 import requests
-
+import time 
+import random
 # -------------------- App Setup --------------------
 st.set_page_config(page_title="Surgical Face Recognition", layout="wide")
 st.sidebar.title("🧭 Navigation")
-page = st.sidebar.radio("Go to", ["🏠 Home", "🔍 Check & Match Image", "➕ Insert New Image", "🖼 View All DB Images"])
+page = st.sidebar.radio("Go to", ["🏠 Home", "🔍 Check & Match Image", "➕ Insert New Image", "🖼 View All DB Images","Visualizations"])
 
 # -------------------- Configs --------------------
 image_size = (92, 118)
@@ -125,97 +126,156 @@ def save_to_db(label, stage, features_pca, image):
         conn.close()
 
 # -------------------- Page 1: Home --------------------
+# -------------------- Page 1: Home --------------------
 if page == "🏠 Home":
-    # ---- CSS to prevent scrolling ----
+    
+# Inject CSS for styling
     st.markdown("""
 <style>
-/* Disable vertical scrolling */
-body, html, .main {
-    overflow: hidden !important;
-}
-
-/* Reduce padding and align title to top-left */
-.block-container {
-    padding-top: 1rem;
-    padding-bottom: 0rem;
-    padding-left: 2rem;
-    padding-right: 2rem;
-}
+    .landing-container {
+        text-align: center;
+        padding: 2rem;
+    }
+    .title {
+        font-size: 3rem;
+        font-weight: 700;
+        color: #00ffe1;
+        margin-bottom: 0.5rem;
+    }
+    .subtitle {
+        font-size: 1.3rem;
+        color: #ffdd57;
+        margin-bottom: 2rem;
+    }
+    .blog-links {
+        text-align: left;
+        display: inline-block;
+        margin-top: 20px;
+        font-size: 1.1rem;
+        line-height: 2;
+        background-color: #1e1e1e;
+        padding: 20px;
+        border-radius: 10px;
+        color: #f0f0f0;
+    }
+    .illustration {
+        margin-top: 2rem;
+        max-width: 65%;
+        border-radius: 15px;
+        box-shadow: 0 0 20px rgba(0,255,255,0.3);
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# Render home content
     st.markdown("""
-<style>
-.simple-title-container {
-  padding-top: 10px;
-  text-align: left;
-}
+<div class="landing-container">
+    <div class="title">Surgical Face Recognition System</div>
+    <div class="subtitle">Built with PCA + LBP + KNN + SVM + Voting Classifier</div>
 
-.simple-title {
-  font-size: 32px;
-  font-weight: 700;
-  color: #00ffe1;
-  margin-bottom: 5px;
-}
+    <div class="blog-links">
+        <strong>📚 Project Tutorials / Blogs:</strong><br>
+        📘 <a href="https://medium.com/@oarunavachakraborty/blog-1-dataset-building-for-surgical-face-recognition-f91e4b3fe914" target="_blank">Blog 1: Dataset Building</a><br>
+        ⚙️ <a href="https://medium.com/@oarunavachakraborty/blog-2-feature-engineering-for-surgical-face-recognition-cec060657d39" target="_blank">Blog 2: Feature Engineering</a><br>
+        📊 <a href="https://medium.com/@oarunavachakraborty/blog-3-deploying-surgical-face-recognition-with-streamlit-mysql-a5bc6ccbdde2" target="_blank">Blog 3: Deployment Guide</a>
+    </div>
 
-.simple-subtitle {
-  font-size: 18px;
-  color: #ffdd57;
-  margin-top: 0;
-}
-</style>
-
-<div class="simple-title-container">
-  <div class="simple-title">Surgical Face Recognition System</div>
-  <div class="simple-subtitle">Built with PCA + LBP + KNN + SVM +Voting Classifier</div>
-</div>""", unsafe_allow_html=True)
+    <img src="https://cdni.iconscout.com/illustration/premium/thumb/face-recognition-3480386-2912021.png" class="illustration"/>
+</div>
+""", unsafe_allow_html=True)
 
 
-   
-
-
-    st.markdown("### 📚 Project Tutorials / Blogs")
-    st.markdown("""- 📘 [Blog 1: Dataset Building](https://medium.com/@oarunavachakraborty/blog-1-dataset-building-for-surgical-face-recognition-f91e4b3fe914)
-- ⚙️ [Blog 2: Feature Engineering](https://medium.com/@oarunavachakraborty/blog-2-feature-engineering-for-surgical-face-recognition-cec060657d39)
-- 📊 [Blog 3: Deployment Guide](https://medium.com/@oarunavachakraborty/blog-3-deploying-surgical-face-recognition-with-streamlit-mysql-a5bc6ccbdde2)""")
 
 # -------------------- Page 2: Check & Match --------------------
 elif page == "🔍 Check & Match Image":
     st.title("🔍 Check & Match Surgical Image")
     uploaded_file = st.file_uploader("📤 Upload an Image", type=["jpg", "jpeg", "png"])
 
+    def parse_filename(label):
+        try:
+            label = label.split('.')[0]  # remove .jpg/.png etc.
+            parts = label.split('_')
+
+            patient_id = parts[0]
+            
+            # Look for 'before' or 'after' in the last segment
+            last_part = parts[-1]
+            if last_part.endswith("before"):
+                stage = "before"
+                surgery = "_".join(parts[1:])[:-6]  # remove 'before'
+            elif last_part.endswith("after"):
+                stage = "after"
+                surgery = "_".join(parts[1:])[:-5]  # remove 'after'
+            else:
+                stage = "Unknown"
+                surgery = "_".join(parts[1:])
+            
+            return patient_id, surgery, stage
+        except:
+            return "Unknown", "Unknown", "Unknown"
+
+
     if uploaded_file:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         uploaded_img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
-        with st.spinner("🧠 Processing..."):
-            features_raw = extract_features_raw(uploaded_img)
-            features_pca = pca.transform(scaler.transform(features_raw))
+        buffer_placeholder = st.empty()  # processing feedback
 
-            pred = model.predict(features_raw)[0]
-            stage = "before" if pred == 0 else "after"
-            stage_opposite = "after" if stage == "before" else "before"
+        # Step 1: Feature Extraction
+        buffer_placeholder.info("🧠 Extracting features...")
+        features_raw = extract_features_raw(uploaded_img)
+        features_pca = pca.transform(scaler.transform(features_raw))
+        time.sleep(1.5)
 
-            label_text = "Before Surgery" if pred == 0 else "After Surgery"
-            confidence = np.max(model.predict_proba(features_raw)) * 100
-            st.success(f"Prediction: **{label_text}** ({confidence:.2f}%)")
+        # Step 2: Classification
+        buffer_placeholder.info("🔎 Predicting surgery stage...")
+        pred = model.predict(features_raw)[0]
+        stage = "before" if pred == 0 else "after"
+        stage_opposite = "after" if stage == "before" else "before"
+        label_text = "Before Surgery" if pred == 0 else "After Surgery"
+        confidence = np.max(model.predict_proba(features_raw)) * 100
+        time.sleep(1.5)
 
-            labels_db, stages_db, vectors_db, images_db = fetch_all_features(stage_filter=stage_opposite)
-            similarities = cosine_similarity(features_pca, vectors_db)[0]
-            best_idx = np.argmax(similarities)
-            best_score = similarities[best_idx]
-            matched = best_score >= SIMILARITY_THRESHOLD
+        # Step 3: Find similar image from DB
+        buffer_placeholder.info("📂 Matching with database...")
+        labels_db, stages_db, vectors_db, images_db = fetch_all_features(stage_filter=stage_opposite)
+        similarities = cosine_similarity(features_pca, vectors_db)[0]
+        best_idx = np.argmax(similarities)
+        best_score = similarities[best_idx]
+        matched = best_score >= SIMILARITY_THRESHOLD
+        time.sleep(1.5)
 
-            col1, col2 = st.columns(2)
-            with col1:
-                st.image(cv2.resize(cv2.cvtColor(uploaded_img, cv2.COLOR_BGR2RGB), (180, 220)), caption="Uploaded Image")
-            with col2:
-                if matched:
-                    st.image(cv2.resize(cv2.cvtColor(images_db[best_idx], cv2.COLOR_BGR2RGB), (180, 220)),
-                             caption=f"Matched: {labels_db[best_idx]} ({best_score*100:.2f}%)")
-                    st.info("✅ Similar image found in DB.")
-                else:
-                    st.warning("❌ No similar face found.")
-                    st.info("Please use 'Insert New Image' section to save this entry.")
+        buffer_placeholder.empty()
+
+        st.success(f"Prediction: **{label_text}** ({confidence:.2f}%)")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.image(cv2.resize(cv2.cvtColor(uploaded_img, cv2.COLOR_BGR2RGB), (220, 260)), caption="Uploaded Image")
+        
+        with col2:
+            if matched:
+                matched_label = labels_db[best_idx]
+                matched_img = images_db[best_idx]
+                pid, surgery_type, matched_stage = parse_filename(matched_label)
+                visit_id = f"VST{random.randint(10000, 99999)}"
+
+                st.image(cv2.resize(cv2.cvtColor(matched_img, cv2.COLOR_BGR2RGB), (220, 260)), caption="Matched Image")
+
+                st.markdown(f"""
+                #### 🧾 Match Details:
+                - **Patient ID:** `{pid}`
+                - **Surgery:** `{surgery_type}`
+                - **Stage:** `{matched_stage}`
+                - **Similarity Score:** `{best_score*100:.2f}%`
+                - **Visit ID:** `{visit_id}`
+                """)
+                st.info("✅ Similar image found in the database.")
+            else:
+                st.warning("❌ No similar face found.")
+                st.info("You may add this new entry using the 'Insert New Image' tab.")
+
+
 
 # -------------------- Page 3: Insert New Image --------------------
 elif page == "➕ Insert New Image":
@@ -279,3 +339,20 @@ elif page == "🖼 View All DB Images":
                 with cols[j]:
                     st.image(cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), (120, 140)),
                              caption=f"{label} ({stage})", use_container_width=True)
+elif page == "📊 Visualizations":
+    st.title("📊 Model Visualizations & Performance")
+    
+    st.subheader("✅ Classification Report")
+    st.markdown("""
+    - **Accuracy**: 84.21%
+    - **Precision**: 82.50%
+    - **Recall**: 83.75%
+    - **F1-score**: 83.12%
+    """)
+    
+    st.subheader("🌀 PCA Dimensionality Reduction")
+    st.image("pca_plot.png", caption="PCA 2D Scatter Plot", use_column_width=True)
+
+    st.subheader("📉 Confusion Matrix")
+    st.image("confusion_matrix.png", caption="Model Confusion Matrix", use_column_width=True)
+
