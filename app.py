@@ -10,7 +10,6 @@ from pathlib import Path
 import requests
 import time 
 import random
-import matplotlib.pyplot as plt
 # -------------------- App Setup --------------------
 st.set_page_config(page_title="Surgical Face Recognition", layout="wide")
 st.sidebar.title("🧭 Navigation")
