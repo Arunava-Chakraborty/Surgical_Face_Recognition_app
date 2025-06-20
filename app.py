@@ -10,10 +10,11 @@ from pathlib import Path
 import requests
 import time 
 import random
+import matplotlib.pyplot as plt
 # -------------------- App Setup --------------------
 st.set_page_config(page_title="Surgical Face Recognition", layout="wide")
 st.sidebar.title("🧭 Navigation")
-page = st.sidebar.radio("Go to", ["🏠 Home", "🔍 Check & Match Image", "➕ Insert New Image", "🖼 View All DB Images","Visualizations"])
+page = st.sidebar.radio("Go to", ["🏠 Home", "🔍 Check & Match Image", "➕ Insert New Image", "🖼 View All DB Images"])
 
 # -------------------- Configs --------------------
 image_size = (92, 118)
@@ -61,12 +62,10 @@ def get_connection():
 def fetch_all_features(stage_filter=None):
     conn = get_connection()
     cursor = conn.cursor()
-
     if stage_filter:
         cursor.execute("SELECT label, stage, feature_vector, image_data FROM surgical_faces WHERE stage = %s", (stage_filter,))
     else:
         cursor.execute("SELECT label, stage, feature_vector, image_data FROM surgical_faces")
-
     data = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -75,8 +74,7 @@ def fetch_all_features(stage_filter=None):
     for label, stage, vec_blob, img_blob in data:
         try:
             feature = joblib.load(io.BytesIO(vec_blob))
-            if feature.shape[1] != model.named_steps['pca'].n_components_:
-                print(f"❌ Skipping {label} ({stage}) due to shape mismatch: {feature.shape}")
+            if feature.shape[1] != model.named_steps["pca"].n_components_:
                 continue
             img_array = np.frombuffer(img_blob, np.uint8)
             img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
@@ -84,11 +82,11 @@ def fetch_all_features(stage_filter=None):
             stages.append(stage)
             vectors.append(feature)
             images.append(img)
-        except Exception as e:
-            print(f"Error loading entry: {e}")
+        except:
             continue
 
     return labels, stages, np.vstack(vectors) if vectors else np.array([]), images
+
 
 # -------------------- Save New Entry --------------------
 def save_to_db(label, stage, features_pca, image):
@@ -125,64 +123,52 @@ def save_to_db(label, stage, features_pca, image):
         cursor.close()
         conn.close()
 
+def insert_patient_log(label, stage):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO patient_logs (label, stage) VALUES (%s, %s)", (label, stage))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Log insert failed: {e}")
+
 # -------------------- Page 1: Home --------------------
 # -------------------- Page 1: Home --------------------
 if page == "🏠 Home":
-    
-# Inject CSS for styling
+    st.title("🧬 Surgical Face Recognition System")
     st.markdown("""
-<style>
-    .landing-container {
-        text-align: center;
-        padding: 2rem;
-    }
-    .title {
-        font-size: 3rem;
-        font-weight: 700;
-        color: #00ffe1;
-        margin-bottom: 0.5rem;
-    }
-    .subtitle {
-        font-size: 1.3rem;
-        color: #ffdd57;
-        margin-bottom: 2rem;
-    }
-    .blog-links {
-        text-align: left;
-        display: inline-block;
-        margin-top: 20px;
-        font-size: 1.1rem;
-        line-height: 2;
-        background-color: #1e1e1e;
-        padding: 20px;
-        border-radius: 10px;
-        color: #f0f0f0;
-    }
-    .illustration {
-        margin-top: 2rem;
-        max-width: 65%;
-        border-radius: 15px;
-        box-shadow: 0 0 20px rgba(0,255,255,0.3);
-    }
-</style>
-""", unsafe_allow_html=True)
+    Welcome to the **Surgical Face Recognition System** – a deep learning-based solution that distinguishes **before** and **after** facial surgery images using hybrid facial features.
 
-# Render home content
+    ---
+    ### 🔍 What it does:
+    - Classifies and matches faces using **LBP**,**SVM**,**KNN** **PCA**, and **VotingClassifier**
+    - Supports **live prediction**, **database insertion**, and **filtering**
+    - Enables advanced **surgery face verification** for research and practical uses
+
+    ---
+    ### 🎥 Watch It In Action:
+    """)
+    st.video("https://www.youtube.com/watch?v=YX8BzK_LU0E")  # Replace with your actual video
+
     st.markdown("""
-<div class="landing-container">
-    <div class="title">Surgical Face Recognition System</div>
-    <div class="subtitle">Built with PCA + LBP + KNN + SVM + Voting Classifier</div>
+    ---
+    ### 🛠️ Built With:
+    - **Frontend:** Streamlit
+    - **Image Processing:** OpenCV
+    - **Feature Engineering:** HOG, LBP
+    - **Dimensionality Reduction:** PCA
+    - **Classifier:** VotingClassifier (SVM + RF)
+    - **Database:** MySQL (Image blobs + feature vectors)
 
-    <div class="blog-links">
-        <strong>📚 Project Tutorials / Blogs:</strong><br>
-        📘 <a href="https://medium.com/@oarunavachakraborty/blog-1-dataset-building-for-surgical-face-recognition-f91e4b3fe914" target="_blank">Blog 1: Dataset Building</a><br>
-        ⚙️ <a href="https://medium.com/@oarunavachakraborty/blog-2-feature-engineering-for-surgical-face-recognition-cec060657d39" target="_blank">Blog 2: Feature Engineering</a><br>
-        📊 <a href="https://medium.com/@oarunavachakraborty/blog-3-deploying-surgical-face-recognition-with-streamlit-mysql-a5bc6ccbdde2" target="_blank">Blog 3: Deployment Guide</a>
-    </div>
+    ---
 
-    <img src="https://cdni.iconscout.com/illustration/premium/thumb/face-recognition-3480386-2912021.png" class="illustration"/>
-</div>
-""", unsafe_allow_html=True)
+    ---
+    ### 📖 Blog / Tutorial:
+    - [Project Walkthrough on Medium](https://medium.com/@oarunavachakraborty/blog-2-feature-engineering-for-surgical-face-recognition-cec060657d39)
+    - [GitHub Repository](https://github.com/Arunava-Chakraborty/Surgical_Face_Recognition_app)
+    """)
 
 
 
@@ -339,20 +325,116 @@ elif page == "🖼 View All DB Images":
                 with cols[j]:
                     st.image(cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), (120, 140)),
                              caption=f"{label} ({stage})", use_container_width=True)
+                    
+  
+  
+elif page == "📊 Visualizations":
+    st.title("📊 Visualize Uploaded Image Transformation")
+
+    uploaded_file = st.file_uploader("📤 Upload a Face Image", type=["jpg", "jpeg", "png"])
+
+    if uploaded_file:
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, image_size)
+
+        # Generate LBP
+        lbp_img = local_binary_pattern(gray, n_points, radius, METHOD)
+
+        # Normalize LBP image for visualization
+        lbp_img_norm = ((lbp_img - lbp_img.min()) / (lbp_img.max() - lbp_img.min()) * 255).astype(np.uint8)
+
+        # Display all 3 images side by side
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.image(cv2.cvtColor(image, cv2.COLOR_BGR2RGB), caption="Original Image", use_column_width=True)
+
+        with col2:
+            st.image(gray, caption="Grayscale Image", use_column_width=True, channels="GRAY")
+
+        with col3:
+            st.image(lbp_img_norm, caption="LBP Image", use_column_width=True, channels="GRAY")
+                  
+   
+ # -------------------- Page: Visualizations --------------------
+# -------------------- Page: Visualizations --------------------
 elif page == "📊 Visualizations":
     st.title("📊 Model Visualizations & Performance")
-    
-    st.subheader("✅ Classification Report")
+
+    # --- Show model metrics ---
+    st.subheader("📈 Performance Metrics")
     st.markdown("""
     - **Accuracy**: 84.21%
     - **Precision**: 82.50%
     - **Recall**: 83.75%
-    - **F1-score**: 83.12%
+    - **F1 Score**: 83.12%
     """)
-    
-    st.subheader("🌀 PCA Dimensionality Reduction")
-    st.image("pca_plot.png", caption="PCA 2D Scatter Plot", use_column_width=True)
 
-    st.subheader("📉 Confusion Matrix")
-    st.image("confusion_matrix.png", caption="Model Confusion Matrix", use_column_width=True)
+    # --- PCA Plot ---
+    st.subheader("🌀 PCA Dimensionality Reduction (2D Scatter)")
+    try:
+        labels, stages, vectors, _ = fetch_all_features()
 
+        if vectors.shape[0] < 2:
+            st.warning("📭 Not enough images in the database to generate a PCA plot.")
+        else:
+            from sklearn.decomposition import PCA
+            pca_2d = PCA(n_components=2)
+            reduced = pca_2d.fit_transform(vectors)
+
+            fig, ax = plt.subplots(figsize=(8, 6))
+            colors = {'before': 'blue', 'after': 'red'}
+
+            for i in range(len(reduced)):
+                label = labels[i]
+                stage = stages[i].lower() if stages[i] else "unknown"
+                color = colors.get(stage, 'gray')
+                ax.scatter(reduced[i, 0], reduced[i, 1], color=color, alpha=0.6)
+                if label:
+                    ax.annotate(label[:6], (reduced[i, 0], reduced[i, 1]), fontsize=7, color=color)
+
+            ax.set_xlabel("PCA Component 1")
+            ax.set_ylabel("PCA Component 2")
+            ax.set_title("PCA 2D Projection of Facial Features")
+            st.pyplot(fig)
+
+    except Exception as e:
+        st.error("❌ PCA visualization failed.")
+        st.exception(e)
+
+
+
+elif page == "📜 Patient Log":
+    st.title("📜 Match & Insert Log History")
+
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT label, stage, timestamp FROM patient_logs ORDER BY timestamp DESC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        if rows:
+            st.markdown("### 🗃 Recent Activity Log")
+            for label, stage, timestamp in rows:
+                # Attempt to parse label info
+                try:
+                    pid, surgery, stage_clean = parse_filename(label)
+                except:
+                    pid, surgery, stage_clean = "Unknown", "Unknown", stage
+
+                with st.expander(f"🆔 Patient: {pid} | {surgery} ({stage_clean})"):
+                    st.markdown(f"""
+                    - **Full Label:** `{label}`
+                    - **Stage:** `{stage_clean}`
+                    - **Surgery Type:** `{surgery}`
+                    - **Timestamp:** `{timestamp}`
+                    """)
+        else:
+            st.info("📭 No logs found in the system.")
+    except Exception as e:
+        st.error("❌ Failed to fetch logs.")
+        st.exception(e)
